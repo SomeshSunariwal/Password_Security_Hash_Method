@@ -24,17 +24,8 @@ func main() {
 
 	query := "INSERT INTO users (email, password) values ($1, $2)"
 	for {
-		email, password := email_password()
-
-		// Hashed Password Generation
-		password = hashAndSlat([]byte(password))
-		_, err := db.Query(query, email, password)
-		if err != nil {
-			log.Info("Error", err)
-			return
-		}
 		var wantToValidate string
-		fmt.Println("Want to Validate. Please write Yes/no")
+		fmt.Println("Want to Validate?. Please write Yes/no")
 		_, err = fmt.Scan(&wantToValidate)
 		if err != nil {
 			log.Info("Error : ", err)
@@ -58,6 +49,16 @@ func main() {
 				fmt.Println("Successfully Logged in ", email)
 			} else {
 				fmt.Println("Not Matched")
+			}
+		} else {
+
+			email, password := email_password()
+			// Hashed Password Generation
+			password = hashAndSlat([]byte(password))
+			_, err := db.Query(query, email, password)
+			if err != nil {
+				log.Info("Error", err)
+				return
 			}
 		}
 		var WantToExit string
