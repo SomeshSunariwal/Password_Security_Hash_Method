@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/SomeshSunariwal/Password_Security_Hash_Method/config"
 	"github.com/labstack/gommon/log"
 	_ "github.com/lib/pq"
 )
 
 func main() {
+
 	connStr := fmt.Sprintf(`user=%s host=%s dbname=%s password=%s sslmode=%s`,
 		config.DBUser, config.DBHost, config.DBName, config.DBPassword, config.DBsslMode)
 	db, err := sql.Open("postgres", connStr)
@@ -18,10 +21,14 @@ func main() {
 		log.Fatal(err)
 		return
 	}
-	query := "INSERT INTO users (user_name, password) values ($1, $2)"
+
+	query := "INSERT INTO users (email, password) values ($1, $2)"
 	for {
-		userName, password := userName_password()
-		_, err := db.Query(query, userName, password)
+		email, password := email_password()
+
+		// Hashed Password Generation
+		password = hashAndSlat([]byte(password))
+		_, err := db.Query(query, email, password)
 		if err != nil {
 			log.Info("Error", err)
 			return
@@ -34,14 +41,24 @@ func main() {
 			return
 		}
 		if strings.ToLower(wantToValidate) == "yes" {
-			user_name, passwordForValidate := userName_password()
-			queryForValidate := "SELECT user_name, password FROM users WHERE user_name=$1 and password=$2"
-			err := db.QueryRow(queryForValidate, user_name, passwordForValidate).Scan(&user_name, &passwordForValidate)
+			email, password := email_password()
+			var passwordForValidate string
+			queryForValidate := "SELECT  password FROM users WHERE email=$1"
+			err := db.QueryRow(queryForValidate, email).Scan(&passwordForValidate)
 			if err != nil {
 				log.Info("Error", err)
 				return
 			}
-			fmt.Println(user_name, passwordForValidate)
+			//Hashed Password Compare
+			matched, err := CompareHashPassword(passwordForValidate, []byte(password))
+			if err != nil {
+				return
+			}
+			if matched {
+				fmt.Println("Successfully Logged in ", email)
+			} else {
+				fmt.Println("Not Matched")
+			}
 		}
 		var WantToExit string
 		fmt.Println("Want to Exit. Please write Yes/no")
@@ -56,10 +73,10 @@ func main() {
 	}
 }
 
-func userName_password() (string, string) {
-	var userName, password string
-	fmt.Println("Please Enter User Name")
-	_, err := fmt.Scan(&userName)
+func email_password() (string, string) {
+	var email, password string
+	fmt.Println("Please Enter Email")
+	_, err := fmt.Scan(&email)
 	if err != nil {
 		log.Info("Error : ", err)
 		return "", ""
@@ -70,5 +87,25 @@ func userName_password() (string, string) {
 		log.Info("Error : ", err)
 		return "", ""
 	}
-	return userName, password
+	return email, password
+}
+
+func hashAndSlat(password []byte) string {
+	hashPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.MinCost)
+	if err != nil {
+		log.Info("Error : ", err)
+		return ""
+	}
+	return string(hashPassword)
+}
+
+func CompareHashPassword(hashedPassword string, password []byte) (bool, error) {
+	byteHash := []byte(hashedPassword)
+
+	err := bcrypt.CompareHashAndPassword(byteHash, []byte(password))
+	if err != nil {
+		log.Info("Error : ", err)
+		return false, err
+	}
+	return true, nil
 }
